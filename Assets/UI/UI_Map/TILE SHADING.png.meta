@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: e79b31311ecc9424fa3df48a32d332c2
+guid: 04ad4bf67a2e5494d80b971b781f70ad
 TextureImporter:
   internalIDToNameTable: []
   externalObjects: {}
@@ -126,8 +126,8 @@ TextureImporter:
       name: TILE SHADING_0
       rect:
         serializedVersion: 2
-        x: 0
-        y: 1
+        x: 1
+        y: 0
         width: 128
         height: 128
       alignment: 0
@@ -137,8 +137,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: 0
       bones: []
-      spriteID: 92924df000312114abd7f4fa5b1cebea
-      internalID: 704363930
+      spriteID: 35db536b727c9eb47b67ebf4a3417255
+      internalID: 1679853825
       vertices: []
       indices: 
       edges: []
@@ -154,7 +154,7 @@ TextureImporter:
     weights: []
     secondaryTextures: []
     nameFileIdTable:
-      TILE SHADING_0: 704363930
+      TILE SHADING_0: 1679853825
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
