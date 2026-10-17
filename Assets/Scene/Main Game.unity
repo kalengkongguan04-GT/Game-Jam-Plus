@@ -2251,7 +2251,7 @@ MonoBehaviour:
   shieldMinEnergyToStart: 10
   shieldPivot: {fileID: 978582441}
   dashCostPercent: 33
-  dashDistance: 4
+  dashDistance: 1.5
   dashDuration: 0.12
   dashCooldown: 0.15
 --- !u!114 &5628018141165316178
