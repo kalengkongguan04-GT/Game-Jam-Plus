@@ -525,7 +525,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b7137fccef7cbbe4894a385beaa4d930, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  gameSceneName: Cutscene
+  gameSceneName: Comic1
   promptText: {fileID: 0}
   blinkSpeed: 3
 --- !u!4 &1325261408
