@@ -40,7 +40,7 @@ namespace Cainos.PixelArtTopDown_Basic
             if (skills != null && skills.IsShielding && skills.shieldPivot != null)
             {
                 Vector2 facing = skills.shieldPivot.right;
-                Vector2 toSource = (sourcePosition - (Vector2)transform.position).normalized;
+                Vector2 toSource = (sourcePosition - (Vector2)skills.shieldPivot.position).normalized; // dari titik shield, bukan pusat player
                 if (Vector2.Dot(facing, toSource) > 0f) return false;
             }
 

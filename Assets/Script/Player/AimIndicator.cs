@@ -11,6 +11,10 @@ namespace Cainos.PixelArtTopDown_Basic
         public Transform arrowPivot;       // titik putar panah (di kaki player)
         public Transform arrowSprite;      // objek panah (child dari arrowPivot)
         [Min(0f)] public float arrowRadius = 0.6f; // jarak panah dari pivot (satuan lokal), lihat lingkaran di Scene view
+
+        [Header("Titik keluar laser")]
+        [Tooltip("Jarak titik keluar laser DI DEPAN pusat panah. 0 = tepat di panah, positif = lebih ke depan, negatif = lebih ke belakang.")]
+        public float laserStartOffset = 0.15f;
         public float rotateSpeed = 0f;     // 0 = langsung mengikuti, >0 = halus (derajat/detik, mis. 720)
 
         [Header("Cursor")]
@@ -46,10 +50,9 @@ namespace Cainos.PixelArtTopDown_Basic
         {
             ApplyCursorState();
 
-            // Arah dihitung dari pusat player, sama seperti yang dipakai skill (PlayerSkills)
-            Vector3 mouseWorld = cam.ScreenToWorldPoint(Input.mousePosition);
-            Vector2 d = (Vector2)mouseWorld - (Vector2)transform.position;
-            if (d.sqrMagnitude > 0.0001f) Direction = d.normalized;
+            // Arah dihitung dari ArrowPivot. PlayerSkills memakai titik dan arah yang SAMA persis,
+            // jadi panah, laser, shield, dan dash selalu searah.
+            Direction = ComputeDirection();
 
             if (arrowPivot == null) return;
 
@@ -103,6 +106,35 @@ namespace Cainos.PixelArtTopDown_Basic
             // Garis arah panah (pivot -> posisi panah)
             Gizmos.color = Color.yellow;
             Gizmos.DrawLine(arrowPivot.position, arrowPivot.position + arrowPivot.right * worldRadius);
+
+            // Titik keluar laser (merah)
+            float muzzleDist = (arrowRadius + laserStartOffset) * Mathf.Abs(arrowPivot.lossyScale.x);
+            Vector3 muzzle = arrowPivot.position + arrowPivot.right * muzzleDist;
+            Gizmos.color = Color.red;
+            Gizmos.DrawWireSphere(muzzle, Mathf.Max(0.05f, worldRadius * 0.12f));
+        }
+
+        // Titik asal bidikan = posisi ArrowPivot (kalau belum diisi, pusat player)
+        public Vector2 Origin => arrowPivot != null ? (Vector2)arrowPivot.position : (Vector2)transform.position;
+
+        // Hitung arah dari Origin ke cursor saat ini (selalu dihitung ulang, tidak telat satu frame)
+        public Vector2 ComputeDirection()
+        {
+            if (cam == null) cam = Camera.main;
+
+            Vector3 sp = Input.mousePosition;
+            sp.z = Mathf.Abs(cam.transform.position.z - transform.position.z); // benar untuk kamera orthographic maupun perspective
+            Vector2 mouseWorld = cam.ScreenToWorldPoint(sp);
+
+            Vector2 d = mouseWorld - Origin;
+            return d.sqrMagnitude < 0.0001f ? Direction : d.normalized;
+        }
+
+        // Titik keluar laser = di panah (radius panah + offset), searah cursor
+        public Vector2 GetMuzzlePosition()
+        {
+            float scale = arrowPivot != null ? Mathf.Abs(arrowPivot.lossyScale.x) : 1f;
+            return Origin + ComputeDirection() * (arrowRadius + laserStartOffset) * scale;
         }
 
         private void ApplyCursorState()

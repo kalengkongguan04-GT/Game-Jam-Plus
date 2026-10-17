@@ -29,7 +29,7 @@ namespace Cainos.PixelArtTopDown_Basic
         public float chargeTime = 0.2f;                  // jeda sebelum laser keluar
         public bool lockMovementWhileCharging = false;   // true = player berhenti saat charge
         public Transform chargeEffect;                   // opsional: sprite/partikel bola energi
-        public float chargeEffectDistance = 0.8f;        // jarak bola dari pusat player, searah cursor
+        public float chargeEffectOffset = 0f;            // geser bola ke depan dari titik keluar laser (0 = tepat di titik keluar)
         public float chargeEffectMaxScale = 0.6f;        // ukuran bola saat charge penuh
 
         [Header("Hit (Laser) - Visual")]
@@ -46,7 +46,9 @@ namespace Cainos.PixelArtTopDown_Basic
         [Header("Def (Shield)")]
         public float shieldDrainPerSecond = 25f;
         public float shieldMinEnergyToStart = 10f;
-        public Transform shieldPivot;           // pivot di tengah player, child "Shield" digeser keluar di sumbu X lokal
+        public Transform shieldPivot;           // pivot shield, akan dipindah ke ArrowPivot otomatis saat aktif
+        public Transform shieldBody;            // opsional: objek sprite shield (child shieldPivot), digeser sesuai shieldDistance
+        public float shieldDistance = 0.9f;     // jarak shield dari ArrowPivot (satuan lokal), lihat lingkaran cyan di Scene view
 
         [Header("Dash")]
         public float dashCostPercent = 33f;
@@ -62,6 +64,7 @@ namespace Cainos.PixelArtTopDown_Basic
         private Rigidbody2D rb;
         private TopDownCharacterController controller;
         private Camera cam;
+        private AimIndicator aim; // sumber titik & arah bidik (sama dengan panah)
         private float lastDashTime = -99f;
         private bool laserActive; // true selama charge DAN saat laser menyala
 
@@ -71,6 +74,7 @@ namespace Cainos.PixelArtTopDown_Basic
             rb = GetComponent<Rigidbody2D>();
             controller = GetComponent<TopDownCharacterController>();
             cam = Camera.main;
+            aim = GetComponent<AimIndicator>();
             SetShield(false);
             HideLaserVisuals();
             if (chargeEffect != null) chargeEffect.gameObject.SetActive(false);
@@ -90,10 +94,20 @@ namespace Cainos.PixelArtTopDown_Basic
         }
 
         // ---------- Util ----------
+        // Titik asal bidikan/laser: sama dengan ArrowPivot kalau ada AimIndicator
+        private Vector2 AimOrigin => aim != null ? aim.Origin : (Vector2)transform.position;
+
+        // Titik keluar laser (di panah)
+        private Vector2 MuzzlePosition() => aim != null ? aim.GetMuzzlePosition() : AimOrigin;
+
         private Vector2 AimDirection()
         {
-            Vector3 m = cam.ScreenToWorldPoint(Input.mousePosition);
-            Vector2 d = (Vector2)m - (Vector2)transform.position;
+            if (aim != null) return aim.ComputeDirection();
+
+            // Cadangan kalau AimIndicator tidak dipasang
+            Vector3 sp = Input.mousePosition;
+            sp.z = Mathf.Abs(cam.transform.position.z - transform.position.z);
+            Vector2 d = (Vector2)cam.ScreenToWorldPoint(sp) - (Vector2)transform.position;
             return d.sqrMagnitude < 0.0001f ? Vector2.down : d.normalized;
         }
 
@@ -134,7 +148,8 @@ namespace Cainos.PixelArtTopDown_Basic
 
             // ----- 2. Tembak (arah diambil saat laser keluar, bukan saat klik) -----
             Vector2 dir = AimDirection();
-            Vector2 origin = transform.position;
+            Vector2 origin = MuzzlePosition();
+            Vector2 muzzleOffset = origin - (Vector2)transform.position; // supaya pangkal laser ikut player yang bergerak
 
             // Damage diberikan sekali saat laser keluar
             RaycastHit2D[] hits = Physics2D.CircleCastAll(origin, laserWidth * 0.5f, dir, laserRange, laserHitMask);
@@ -153,7 +168,7 @@ namespace Cainos.PixelArtTopDown_Basic
                 float w = laserWidth * laserWidthCurve.Evaluate(k);
 
                 // Pangkal laser mengikuti player yang bergerak, arahnya tetap
-                Vector2 o = transform.position;
+                Vector2 o = (Vector2)transform.position + muzzleOffset;
                 SetLaser(laserLine, o, o + dir * laserRange, w);
                 SetLaser(laserCore, o, o + dir * laserRange, w * coreWidthRatio);
 
@@ -168,8 +183,8 @@ namespace Cainos.PixelArtTopDown_Basic
         private void UpdateChargeEffect(float k)
         {
             if (chargeEffect == null) return;
-            // Bola energi di depan player (searah cursor) yang membesar selama charge
-            chargeEffect.position = (Vector2)transform.position + AimDirection() * chargeEffectDistance;
+            // Bola energi di titik keluar laser (di panah), membesar selama charge
+            chargeEffect.position = MuzzlePosition() + AimDirection() * chargeEffectOffset;
             float eased = k * k; // pelan di awal, cepat di akhir
             chargeEffect.localScale = Vector3.one * (chargeEffectMaxScale * eased);
         }
@@ -209,10 +224,12 @@ namespace Cainos.PixelArtTopDown_Basic
                     return;
                 }
 
-                // Arahkan shield ke cursor
-                Vector2 aim = AimDirection();
-                float angle = Mathf.Atan2(aim.y, aim.x) * Mathf.Rad2Deg;
+                // Shield berputar mengelilingi ArrowPivot, searah panah
+                Vector2 aimDir = AimDirection();
+                float angle = Mathf.Atan2(aimDir.y, aimDir.x) * Mathf.Rad2Deg;
+                shieldPivot.position = AimOrigin;
                 shieldPivot.rotation = Quaternion.Euler(0f, 0f, angle);
+                if (shieldBody != null) shieldBody.localPosition = new Vector3(shieldDistance, 0f, 0f);
 
                 // Energi terkuras sesuai lama pemakaian
                 if (!energy.Drain(shieldDrainPerSecond * Time.deltaTime))
@@ -238,6 +255,19 @@ namespace Cainos.PixelArtTopDown_Basic
             IsCharging = false;
             IsDashing = false;
             if (controller != null) controller.movementLocked = false;
+        }
+
+        // Lingkaran jarak shield (cyan), muncul di Scene view saat Player dipilih
+        private void OnDrawGizmosSelected()
+        {
+            if (shieldPivot == null) return;
+
+            var a = aim != null ? aim : GetComponent<AimIndicator>();
+            Vector2 origin = a != null ? a.Origin : (Vector2)transform.position;
+            float worldRadius = shieldDistance * Mathf.Abs(shieldPivot.lossyScale.x);
+
+            Gizmos.color = Color.cyan;
+            Gizmos.DrawWireSphere(origin, worldRadius);
         }
 
         // ---------- DASH ----------
