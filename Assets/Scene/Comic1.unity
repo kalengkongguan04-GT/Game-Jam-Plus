@@ -180,10 +180,20 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 7101242990851057099, guid: b67ef3d712209dc48bf4fc7b9e0a1a8d,
+        type: 3}
+      propertyPath: showFirstStepAutomatically
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 9056194208586025405, guid: b67ef3d712209dc48bf4fc7b9e0a1a8d,
         type: 3}
       propertyPath: m_Name
       value: MAIN
+      objectReference: {fileID: 0}
+    - target: {fileID: 9155780940079418754, guid: b67ef3d712209dc48bf4fc7b9e0a1a8d,
+        type: 3}
+      propertyPath: showFirstStepAutomatically
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
