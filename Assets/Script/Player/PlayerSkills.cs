@@ -18,13 +18,30 @@ namespace Cainos.PixelArtTopDown_Basic
         public int defMouseButton = 1;          // klik kanan (tahan)
         public KeyCode dashKey = KeyCode.Space;
 
-        [Header("Hit (Laser)")]
+        [Header("Hit (Laser) - Dasar")]
         public float hitCostPercent = 75f;      // % dari max energi
         public float laserRange = 12f;
-        public float laserWidth = 0.8f;
+        public float laserWidth = 0.8f;         // lebar hitbox sekaligus lebar maksimum visual
         public float laserDuration = 0.25f;
         public LayerMask laserHitMask;          // layer musuh/dinding (JANGAN centang layer Player)
-        public LineRenderer laserLine;          // opsional, untuk visual
+
+        [Header("Hit (Laser) - Charge-up")]
+        public float chargeTime = 0.2f;                  // jeda sebelum laser keluar
+        public bool lockMovementWhileCharging = false;   // true = player berhenti saat charge
+        public Transform chargeEffect;                   // opsional: sprite/partikel bola energi
+        public float chargeEffectDistance = 0.8f;        // jarak bola dari pusat player, searah cursor
+        public float chargeEffectMaxScale = 0.6f;        // ukuran bola saat charge penuh
+
+        [Header("Hit (Laser) - Visual")]
+        public LineRenderer laserLine;          // lapisan luar (glow), lebih tebal dan transparan
+        public LineRenderer laserCore;          // opsional: inti putih tipis
+        [Range(0.05f, 1f)] public float coreWidthRatio = 0.3f; // lebar inti dibanding lapisan luar
+        [Tooltip("Sumbu X = progres laser (0..1), sumbu Y = pengali lebar. Default: melebar cepat, bertahan, lalu mengecil.")]
+        public AnimationCurve laserWidthCurve = new AnimationCurve(
+            new Keyframe(0f, 0f),
+            new Keyframe(0.12f, 1f),
+            new Keyframe(0.6f, 1f),
+            new Keyframe(1f, 0f));
 
         [Header("Def (Shield)")]
         public float shieldDrainPerSecond = 25f;
@@ -39,13 +56,14 @@ namespace Cainos.PixelArtTopDown_Basic
 
         public bool IsShielding { get; private set; }
         public bool IsDashing { get; private set; }
+        public bool IsCharging { get; private set; }
 
         private PlayerEnergy energy;
         private Rigidbody2D rb;
         private TopDownCharacterController controller;
         private Camera cam;
         private float lastDashTime = -99f;
-        private bool laserActive;
+        private bool laserActive; // true selama charge DAN saat laser menyala
 
         private void Awake()
         {
@@ -54,7 +72,8 @@ namespace Cainos.PixelArtTopDown_Basic
             controller = GetComponent<TopDownCharacterController>();
             cam = Camera.main;
             SetShield(false);
-            if (laserLine != null) laserLine.enabled = false;
+            HideLaserVisuals();
+            if (chargeEffect != null) chargeEffect.gameObject.SetActive(false);
         }
 
         private void Update()
@@ -67,7 +86,7 @@ namespace Cainos.PixelArtTopDown_Basic
             if (IsShielding) return;
 
             if (Input.GetMouseButtonDown(hitMouseButton)) TryHit();
-            if (Input.GetKeyDown(dashKey)) TryDash();
+            if (Input.GetKeyDown(dashKey) && !IsCharging) TryDash(); // dash tidak bisa saat charge, supaya energi tidak terbuang
         }
 
         // ---------- Util ----------
@@ -83,16 +102,41 @@ namespace Cainos.PixelArtTopDown_Basic
         {
             if (laserActive) return;
             float cost = energy.maxEnergy * hitCostPercent / 100f;
-            if (!energy.TryConsume(cost)) return;
-            StartCoroutine(FireLaser(AimDirection()));
+            if (!energy.TryConsume(cost)) return; // energi dipotong di awal charge
+            StartCoroutine(HitRoutine());
         }
 
-        private IEnumerator FireLaser(Vector2 dir)
+        private IEnumerator HitRoutine()
         {
             laserActive = true;
+
+            // ----- 1. Charge-up -----
+            IsCharging = true;
+            if (lockMovementWhileCharging && controller != null)
+            {
+                controller.movementLocked = true;
+                rb.velocity = Vector2.zero;
+            }
+
+            if (chargeEffect != null) chargeEffect.gameObject.SetActive(true);
+
+            float t = 0f;
+            while (t < chargeTime)
+            {
+                t += Time.deltaTime;
+                UpdateChargeEffect(Mathf.Clamp01(t / chargeTime));
+                yield return null;
+            }
+
+            if (chargeEffect != null) chargeEffect.gameObject.SetActive(false);
+            if (lockMovementWhileCharging && controller != null) controller.movementLocked = false;
+            IsCharging = false;
+
+            // ----- 2. Tembak (arah diambil saat laser keluar, bukan saat klik) -----
+            Vector2 dir = AimDirection();
             Vector2 origin = transform.position;
 
-            // Damage diberikan sekali di awal tembakan
+            // Damage diberikan sekali saat laser keluar
             RaycastHit2D[] hits = Physics2D.CircleCastAll(origin, laserWidth * 0.5f, dir, laserRange, laserHitMask);
             foreach (var h in hits)
             {
@@ -100,25 +144,59 @@ namespace Cainos.PixelArtTopDown_Basic
                 if (target != null) target.OnLaserHit();
             }
 
-            if (laserLine != null)
+            // ----- 3. Animasi visual laser -----
+            EnableLaserVisuals(true);
+            float elapsed = 0f;
+            while (elapsed < laserDuration)
             {
-                laserLine.enabled = true;
-                laserLine.useWorldSpace = true;
-                laserLine.startWidth = laserLine.endWidth = laserWidth;
-                laserLine.SetPosition(0, origin);
-                laserLine.SetPosition(1, origin + dir * laserRange);
+                float k = Mathf.Clamp01(elapsed / laserDuration);
+                float w = laserWidth * laserWidthCurve.Evaluate(k);
+
+                // Pangkal laser mengikuti player yang bergerak, arahnya tetap
+                Vector2 o = transform.position;
+                SetLaser(laserLine, o, o + dir * laserRange, w);
+                SetLaser(laserCore, o, o + dir * laserRange, w * coreWidthRatio);
+
+                elapsed += Time.deltaTime;
+                yield return null;
             }
 
-            yield return new WaitForSeconds(laserDuration);
-
-            if (laserLine != null) laserLine.enabled = false;
+            HideLaserVisuals();
             laserActive = false;
         }
+
+        private void UpdateChargeEffect(float k)
+        {
+            if (chargeEffect == null) return;
+            // Bola energi di depan player (searah cursor) yang membesar selama charge
+            chargeEffect.position = (Vector2)transform.position + AimDirection() * chargeEffectDistance;
+            float eased = k * k; // pelan di awal, cepat di akhir
+            chargeEffect.localScale = Vector3.one * (chargeEffectMaxScale * eased);
+        }
+
+        private void SetLaser(LineRenderer lr, Vector2 from, Vector2 to, float width)
+        {
+            if (lr == null) return;
+            lr.positionCount = 2;
+            lr.useWorldSpace = true;
+            lr.startWidth = lr.endWidth = width;
+            lr.SetPosition(0, from);
+            lr.SetPosition(1, to);
+        }
+
+        private void EnableLaserVisuals(bool on)
+        {
+            if (laserLine != null) laserLine.enabled = on;
+            if (laserCore != null) laserCore.enabled = on;
+        }
+
+        private void HideLaserVisuals() => EnableLaserVisuals(false);
 
         // ---------- DEF ----------
         private void HandleShield()
         {
-            bool wantShield = Input.GetMouseButton(defMouseButton);
+            // Shield tidak bisa dinyalakan saat charge/menembak
+            bool wantShield = !laserActive && Input.GetMouseButton(defMouseButton);
 
             if (wantShield && !IsShielding && energy.Has(shieldMinEnergyToStart))
                 SetShield(true);
@@ -132,7 +210,8 @@ namespace Cainos.PixelArtTopDown_Basic
                 }
 
                 // Arahkan shield ke cursor
-                float angle = Mathf.Atan2(AimDirection().y, AimDirection().x) * Mathf.Rad2Deg;
+                Vector2 aim = AimDirection();
+                float angle = Mathf.Atan2(aim.y, aim.x) * Mathf.Rad2Deg;
                 shieldPivot.rotation = Quaternion.Euler(0f, 0f, angle);
 
                 // Energi terkuras sesuai lama pemakaian
@@ -153,8 +232,10 @@ namespace Cainos.PixelArtTopDown_Basic
         {
             StopAllCoroutines();
             SetShield(false);
-            if (laserLine != null) laserLine.enabled = false;
+            HideLaserVisuals();
+            if (chargeEffect != null) chargeEffect.gameObject.SetActive(false);
             laserActive = false;
+            IsCharging = false;
             IsDashing = false;
             if (controller != null) controller.movementLocked = false;
         }
