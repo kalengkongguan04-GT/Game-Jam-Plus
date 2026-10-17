@@ -148,6 +148,17 @@ namespace Cainos.PixelArtTopDown_Basic
             if (shieldPivot != null) shieldPivot.gameObject.SetActive(on);
         }
 
+        // Dipanggil PlayerDeath saat mati: hentikan semua skill yang sedang berjalan
+        public void ResetState()
+        {
+            StopAllCoroutines();
+            SetShield(false);
+            if (laserLine != null) laserLine.enabled = false;
+            laserActive = false;
+            IsDashing = false;
+            if (controller != null) controller.movementLocked = false;
+        }
+
         // ---------- DASH ----------
         private void TryDash()
         {
