@@ -10,17 +10,37 @@ namespace Cainos.PixelArtTopDown_Basic
         Staggered   // musuh muncul satu per satu dengan jeda
     }
 
+    public enum EnemyMixMode
+    {
+        FixedRatio,      // komposisi pasti sesuai persentase (mis. 10 musuh, 70/30 -> 7 dan 3), urutannya diacak
+        WeightedRandom   // tiap musuh diundi sendiri, jadi komposisi bisa bervariasi tiap kali
+    }
+
+    [System.Serializable]
+    public class SpawnEntry
+    {
+        [Tooltip("Label otomatis (nama prefab + persentase). Tidak perlu diedit.")]
+        public string label;
+        public GameObject prefab;
+        [Tooltip("Bobot relatif. Angka 70 dan 30 berarti 70% dan 30%. Total tidak harus 100.")]
+        [Min(0f)] public float weight = 1f;
+    }
+
     // Pasang di objek kosong dengan BoxCollider2D (Is Trigger) yang menutupi area ruangan.
     // Atur ukuran area lewat Size di BoxCollider2D, JANGAN lewat Scale objek.
     [RequireComponent(typeof(BoxCollider2D))]
     public class EnemySpawner : MonoBehaviour
     {
         [Header("Musuh")]
-        public GameObject enemyPrefab;
+        public List<SpawnEntry> enemies = new List<SpawnEntry>();
+        public EnemyMixMode mixMode = EnemyMixMode.FixedRatio;
         public int enemyCount = 5;                 // total musuh yang akan di-spawn
 
+        [Header("Lama (satu prefab) - hanya dipakai kalau daftar di atas kosong")]
+        public GameObject enemyPrefab;
+
         [Header("Kapan spawn")]
-        public bool spawnOnStart = true;           // mulai saat game dimulai
+        public bool spawnOnStart = true;           // spawn saat game mulai
         public bool spawnWhenPlayerEnters = false; // atau tunggu player masuk ruangan (sekali saja)
 
         [Header("Cara spawn")]
@@ -39,10 +59,14 @@ namespace Cainos.PixelArtTopDown_Basic
         public LayerMask obstacleMask;                 // layer Wall / objek penghalang
         public int maxAttemptsPerEnemy = 30;
 
+        // Semua spawner di scene (dipakai sistem respawn)
+        public static readonly List<EnemySpawner> All = new List<EnemySpawner>();
+
         private BoxCollider2D area;
         private Transform player;
         private readonly List<GameObject> spawned = new List<GameObject>();
         private bool hasSpawned;
+        private bool spawnFinished; // semua musuh sudah selesai di-spawn
 
         // Jumlah musuh yang masih hidup dari spawner ini
         public int AliveCount
@@ -54,10 +78,29 @@ namespace Cainos.PixelArtTopDown_Basic
             }
         }
 
+        private void OnEnable()  { All.Add(this); }
+        private void OnDisable() { All.Remove(this); }
+
         private void Awake()
         {
             area = GetComponent<BoxCollider2D>();
             area.isTrigger = true;
+        }
+
+        // Memperbarui label tiap entri di Inspector: "NamaPrefab - 70%"
+        private void OnValidate()
+        {
+            float total = 0f;
+            foreach (var e in enemies)
+                if (e != null && e.prefab != null && e.weight > 0f) total += e.weight;
+
+            foreach (var e in enemies)
+            {
+                if (e == null) continue;
+                string name = e.prefab != null ? e.prefab.name : "(prefab kosong)";
+                float pct = (e.prefab != null && e.weight > 0f && total > 0f) ? e.weight / total * 100f : 0f;
+                e.label = $"{name} - {pct:0.#}%";
+            }
         }
 
         private void Start()
@@ -77,9 +120,10 @@ namespace Cainos.PixelArtTopDown_Basic
         public void SpawnAll()
         {
             if (hasSpawned) return;
-            if (enemyPrefab == null)
+
+            if (GetValidEntries().Count == 0)
             {
-                Debug.LogWarning("[EnemySpawner] Enemy Prefab belum diisi.", this);
+                Debug.LogWarning("[EnemySpawner] Tidak ada prefab valid. Isi daftar Enemies (prefab + weight lebih dari 0).", this);
                 return;
             }
 
@@ -87,9 +131,142 @@ namespace Cainos.PixelArtTopDown_Basic
             StartCoroutine(SpawnRoutine());
         }
 
+        // ---------- Sistem respawn ----------
+        // Ruangan dianggap "selesai" kalau semua musuh sudah di-spawn dan semuanya sudah mati.
+        public bool IsCleared => spawnFinished && AliveCount == 0;
+
+        // Ruangan yang sudah selesai SAAT checkpoint diaktifkan dikunci: tidak ikut reset lagi.
+        public bool Committed { get; private set; }
+
+        public void Commit()
+        {
+            if (IsCleared) Committed = true;
+        }
+
+        // Dipanggil Checkpoint: kunci semua ruangan yang sudah bersih
+        public static void CommitAllCleared()
+        {
+            foreach (var s in new List<EnemySpawner>(All))
+                if (s != null) s.Commit();
+        }
+
+        // Dipanggil PlayerDeath setelah player pindah ke checkpoint: ruangan yang belum dikunci diulang dari awal
+        public static void ResetAllUncommitted()
+        {
+            foreach (var s in new List<EnemySpawner>(All))
+                if (s != null) s.ResetSpawner();
+        }
+
+        public void ResetSpawner()
+        {
+            if (Committed) return; // sudah bersih sebelum checkpoint: tetap bersih
+
+            StopAllCoroutines();
+            foreach (var e in spawned)
+                if (e != null) Destroy(e);
+            spawned.Clear();
+
+            hasSpawned = false;
+            spawnFinished = false;
+
+            if (player == null)
+            {
+                var p = GameObject.FindGameObjectWithTag("Player");
+                if (p != null) player = p.transform;
+            }
+
+            // Spawn ulang sesuai cara kerja spawner ini
+            if (spawnOnStart && !spawnWhenPlayerEnters)
+            {
+                SpawnAll();
+            }
+            else if (spawnWhenPlayerEnters && player != null && area.OverlapPoint(player.position))
+            {
+                // Player respawn di dalam area: OnTriggerEnter tidak akan terpanggil lagi, jadi spawn langsung
+                SpawnAll();
+            }
+        }
+
+        // ---------- Pemilihan prefab ----------
+        private List<SpawnEntry> GetValidEntries()
+        {
+            var list = new List<SpawnEntry>();
+            foreach (var e in enemies)
+                if (e != null && e.prefab != null && e.weight > 0f) list.Add(e);
+
+            // Kompatibilitas: kalau daftar kosong tapi slot lama terisi, pakai itu
+            if (list.Count == 0 && enemyPrefab != null)
+                list.Add(new SpawnEntry { prefab = enemyPrefab, weight = 1f });
+
+            return list;
+        }
+
+        private GameObject PickWeighted(List<SpawnEntry> entries)
+        {
+            float total = 0f;
+            foreach (var e in entries) total += e.weight;
+
+            float roll = Random.Range(0f, total);
+            float cumulative = 0f;
+            foreach (var e in entries)
+            {
+                cumulative += e.weight;
+                if (roll <= cumulative) return e.prefab;
+            }
+            return entries[entries.Count - 1].prefab;
+        }
+
+        // Komposisi pasti: bagi jumlah musuh sesuai persentase (metode sisa terbesar), lalu acak urutannya
+        private List<GameObject> BuildFixedPlan(List<SpawnEntry> entries)
+        {
+            float total = 0f;
+            foreach (var e in entries) total += e.weight;
+
+            int n = entries.Count;
+            int[] counts = new int[n];
+            float[] remainder = new float[n];
+            int assigned = 0;
+
+            for (int i = 0; i < n; i++)
+            {
+                float exact = entries[i].weight / total * enemyCount;
+                counts[i] = Mathf.FloorToInt(exact);
+                remainder[i] = exact - counts[i];
+                assigned += counts[i];
+            }
+
+            // Sisa slot diberikan ke entri dengan pecahan terbesar
+            while (assigned < enemyCount)
+            {
+                int best = 0;
+                for (int i = 1; i < n; i++)
+                    if (remainder[i] > remainder[best]) best = i;
+                counts[best]++;
+                remainder[best] = -1f;
+                assigned++;
+            }
+
+            var plan = new List<GameObject>();
+            for (int i = 0; i < n; i++)
+                for (int c = 0; c < counts[i]; c++)
+                    plan.Add(entries[i].prefab);
+
+            // Acak urutan (Fisher-Yates) supaya jenis musuh tidak muncul berkelompok
+            for (int i = plan.Count - 1; i > 0; i--)
+            {
+                int j = Random.Range(0, i + 1);
+                (plan[i], plan[j]) = (plan[j], plan[i]);
+            }
+            return plan;
+        }
+
+        // ---------- Proses spawn ----------
         private IEnumerator SpawnRoutine()
         {
             bool staggered = spawnMode == SpawnMode.Staggered;
+
+            var entries = GetValidEntries();
+            List<GameObject> plan = mixMode == EnemyMixMode.FixedRatio ? BuildFixedPlan(entries) : null;
 
             if (staggered && initialDelay > 0f)
                 yield return new WaitForSeconds(initialDelay);
@@ -108,7 +285,8 @@ namespace Cainos.PixelArtTopDown_Basic
 
                 if (TryFindSpawnPoint(out Vector2 pos))
                 {
-                    spawned.Add(Instantiate(enemyPrefab, pos, Quaternion.identity));
+                    GameObject prefab = plan != null ? plan[spawnedTotal] : PickWeighted(entries);
+                    spawned.Add(Instantiate(prefab, pos, Quaternion.identity));
                     spawnedTotal++;
                     consecutiveFails = 0;
 
@@ -125,12 +303,15 @@ namespace Cainos.PixelArtTopDown_Basic
                     {
                         Debug.LogWarning($"[EnemySpawner] Hanya {spawnedTotal} dari {enemyCount} musuh yang muat. " +
                                          "Perbesar area atau kecilkan Min Distance.", this);
+                        spawnFinished = true;
                         yield break;
                     }
                     // Mungkin player/musuh sedang menghalangi, coba lagi sebentar lagi
                     yield return new WaitForSeconds(0.3f);
                 }
             }
+
+            spawnFinished = true;
         }
 
         private bool TryFindSpawnPoint(out Vector2 result)

@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Cainos.PixelArtTopDown_Basic
@@ -24,6 +25,9 @@ namespace Cainos.PixelArtTopDown_Basic
         public float laserWidth = 0.8f;         // lebar hitbox sekaligus lebar maksimum visual
         public float laserDuration = 0.25f;
         public LayerMask laserHitMask;          // layer musuh/dinding (JANGAN centang layer Player)
+        [Tooltip("true = laser mengenai musuh (IHittable) di layer mana pun, jadi tidak terpengaruh perubahan layer saat game berjalan. false = hanya layer di Laser Hit Mask.")]
+        public bool hitAllLayers = true;
+        public bool debugLaser = false;         // true: tulis log + gambar kotak hitbox laser di Scene view
 
         [Header("Hit (Laser) - Charge-up")]
         public float chargeTime = 0.2f;                  // jeda sebelum laser keluar
@@ -49,6 +53,7 @@ namespace Cainos.PixelArtTopDown_Basic
         public Transform shieldPivot;           // pivot shield, akan dipindah ke ArrowPivot otomatis saat aktif
         public Transform shieldBody;            // opsional: objek sprite shield (child shieldPivot), digeser sesuai shieldDistance
         public float shieldDistance = 0.9f;     // jarak shield dari ArrowPivot (satuan lokal), lihat lingkaran cyan di Scene view
+        public bool shieldAutoCenter = true;    // true = titik tengah GAMBAR shield dipaksa tepat di garis panah, apa pun pivot sprite-nya
 
         [Header("Dash")]
         public float dashCostPercent = 33f;
@@ -65,6 +70,7 @@ namespace Cainos.PixelArtTopDown_Basic
         private TopDownCharacterController controller;
         private Camera cam;
         private AimIndicator aim; // sumber titik & arah bidik (sama dengan panah)
+        private SpriteRenderer shieldRenderer;
         private float lastDashTime = -99f;
         private bool laserActive; // true selama charge DAN saat laser menyala
 
@@ -75,6 +81,7 @@ namespace Cainos.PixelArtTopDown_Basic
             controller = GetComponent<TopDownCharacterController>();
             cam = Camera.main;
             aim = GetComponent<AimIndicator>();
+            if (shieldBody != null) shieldRenderer = shieldBody.GetComponentInChildren<SpriteRenderer>(true); // true: objek shield awalnya nonaktif
             SetShield(false);
             HideLaserVisuals();
             if (chargeEffect != null) chargeEffect.gameObject.SetActive(false);
@@ -152,12 +159,7 @@ namespace Cainos.PixelArtTopDown_Basic
             Vector2 muzzleOffset = origin - (Vector2)transform.position; // supaya pangkal laser ikut player yang bergerak
 
             // Damage diberikan sekali saat laser keluar
-            RaycastHit2D[] hits = Physics2D.CircleCastAll(origin, laserWidth * 0.5f, dir, laserRange, laserHitMask);
-            foreach (var h in hits)
-            {
-                var target = h.collider.GetComponentInParent<IHittable>();
-                if (target != null) target.OnLaserHit();
-            }
+            ApplyLaserDamage(origin, dir);
 
             // ----- 3. Animasi visual laser -----
             EnableLaserVisuals(true);
@@ -178,6 +180,46 @@ namespace Cainos.PixelArtTopDown_Basic
 
             HideLaserVisuals();
             laserActive = false;
+        }
+
+        // Hitbox laser = persegi panjang sepanjang laser. Mengenai SEMUA collider yang bersentuhan,
+        // termasuk musuh yang menumpuk atau yang sudah menempel di titik keluar laser.
+        private void ApplyLaserDamage(Vector2 origin, Vector2 dir)
+        {
+            Vector2 center = origin + dir * (laserRange * 0.5f);
+            float angle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
+            int mask = hitAllLayers ? -1 : laserHitMask.value; // -1 = semua layer
+            Collider2D[] cols = Physics2D.OverlapBoxAll(center, new Vector2(laserRange, laserWidth), angle, mask);
+
+            var alreadyHit = new HashSet<IHittable>(); // satu musuh cukup kena sekali walau punya banyak collider
+            foreach (var col in cols)
+            {
+                var target = col.GetComponentInParent<IHittable>();
+                if (target != null && alreadyHit.Add(target)) target.OnLaserHit();
+
+                if (debugLaser)
+                    Debug.Log($"[Laser] kena {col.name} (layer {LayerMask.LayerToName(col.gameObject.layer)}), IHittable? {target != null}");
+            }
+
+            if (debugLaser)
+            {
+                Debug.Log($"[Laser] collider terkena: {cols.Length}, musuh dihancurkan: {alreadyHit.Count}, mask = {laserHitMask.value}");
+                // Daftar SEMUA collider di jalur laser (tanpa filter mask), supaya kelihatan siapa yang terlewat dan kenapa
+                Collider2D[] all = Physics2D.OverlapBoxAll(center, new Vector2(laserRange, laserWidth), angle);
+                foreach (var c in all)
+                {
+                    int layer = c.gameObject.layer;
+                    bool inMask = ((1 << layer) & laserHitMask.value) != 0;
+                    Debug.Log($"[Laser-debug] {c.name} | layer {layer} ({LayerMask.LayerToName(layer)}) | masuk mask? {inMask}");
+                }
+
+                Vector2 along = dir * (laserRange * 0.5f);
+                Vector2 side = new Vector2(-dir.y, dir.x) * (laserWidth * 0.5f);
+                Debug.DrawLine(center - along - side, center + along - side, Color.red, 1f);
+                Debug.DrawLine(center + along - side, center + along + side, Color.red, 1f);
+                Debug.DrawLine(center + along + side, center - along + side, Color.red, 1f);
+                Debug.DrawLine(center - along + side, center - along - side, Color.red, 1f);
+            }
         }
 
         private void UpdateChargeEffect(float k)
@@ -229,12 +271,28 @@ namespace Cainos.PixelArtTopDown_Basic
                 float angle = Mathf.Atan2(aimDir.y, aimDir.x) * Mathf.Rad2Deg;
                 shieldPivot.position = AimOrigin;
                 shieldPivot.rotation = Quaternion.Euler(0f, 0f, angle);
-                if (shieldBody != null) shieldBody.localPosition = new Vector3(shieldDistance, 0f, 0f);
+                PlaceShieldBody();
 
                 // Energi terkuras sesuai lama pemakaian
                 if (!energy.Drain(shieldDrainPerSecond * Time.deltaTime))
                     SetShield(false);
             }
+        }
+
+        // Letakkan shield di orbit panah. Kalau shieldAutoCenter aktif, titik tengah gambar
+        // (bukan titik pivot sprite) yang ditaruh tepat di garis panah.
+        private void PlaceShieldBody()
+        {
+            if (shieldBody == null) return;
+
+            Vector3 target = new Vector3(shieldDistance, 0f, 0f);
+            shieldBody.localPosition = target;
+
+            if (!shieldAutoCenter || shieldRenderer == null || shieldRenderer.sprite == null) return;
+
+            Vector3 worldCenter = shieldRenderer.transform.TransformPoint(shieldRenderer.sprite.bounds.center);
+            Vector3 localOffset = shieldPivot.InverseTransformVector(worldCenter - shieldBody.position);
+            shieldBody.localPosition = target - new Vector3(localOffset.x, localOffset.y, 0f);
         }
 
         private void SetShield(bool on)

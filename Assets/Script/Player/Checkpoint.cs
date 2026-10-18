@@ -18,6 +18,7 @@ namespace Cainos.PixelArtTopDown_Basic
             if (death == null) return;
 
             death.SetCheckpoint(transform.position);
+            EnemySpawner.CommitAllCleared(); // ruangan yang sudah bersih sampai titik ini tidak akan diulang
             activated = true;
             if (sprite != null) sprite.color = activeColor;
         }

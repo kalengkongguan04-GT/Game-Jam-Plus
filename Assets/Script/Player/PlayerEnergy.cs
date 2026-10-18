@@ -15,6 +15,9 @@ namespace Cainos.PixelArtTopDown_Basic
         // Diisi oleh PlayerSkills (mis. saat shield aktif, regen berhenti)
         public bool regenPaused;
 
+        // Cheat/testing: energi tidak pernah berkurang
+        public bool infinite;
+
         public event Action<float, float> OnEnergyChanged; // (current, max)
 
         private void Awake()
@@ -33,11 +36,12 @@ namespace Cainos.PixelArtTopDown_Basic
             Set(Current + regenPerSecond * Time.deltaTime);
         }
 
-        public bool Has(float amount) => Current >= amount;
+        public bool Has(float amount) => infinite || Current >= amount;
 
         // Pakai energi sekali bayar (Hit, Dash). Gagal kalau tidak cukup.
         public bool TryConsume(float amount)
         {
+            if (infinite) return true;
             if (Current < amount) return false;
             Set(Current - amount);
             return true;
@@ -46,6 +50,7 @@ namespace Cainos.PixelArtTopDown_Basic
         // Pakai energi sedikit demi sedikit (Shield). Kembalikan false kalau habis.
         public bool Drain(float amount)
         {
+            if (infinite) return true;
             Set(Current - amount);
             return Current > 0f;
         }

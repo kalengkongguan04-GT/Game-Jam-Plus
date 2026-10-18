@@ -9,11 +9,14 @@ namespace Cainos.PixelArtTopDown_Basic
     {
         public float respawnDelay = 0.6f;
         public bool invincibleWhileDashing = true;   // i-frame saat dash
+        public bool godMode = false;                 // cheat/testing: tidak bisa mati sama sekali
+        public float respawnGraceTime = 1f;          // kebal sebentar setelah respawn (detik), 0 = tidak ada
         public string projectileTag = "EnemyProjectile";
 
         public bool IsDead { get; private set; }
 
         private Vector3 respawnPoint;
+        private float graceUntil;
         private Rigidbody2D rb;
         private PlayerEnergy energy;
         private PlayerSkills skills;
@@ -31,14 +34,17 @@ namespace Cainos.PixelArtTopDown_Basic
         public void SetCheckpoint(Vector3 position) => respawnPoint = position;
 
         // Dipanggil peluru/musuh. Kembalikan true kalau player benar-benar kena.
-        public bool TryHit(Vector2 sourcePosition)
+        // dashCanDodge / shieldCanBlock: apakah dash/shield boleh menyelamatkan player dari serangan ini.
+        // shieldIgnoresDirection: true = shield aktif melindungi dari arah mana pun (dipakai jebakan laser).
+        public bool TryHit(Vector2 sourcePosition, bool dashCanDodge = true, bool shieldCanBlock = true, bool shieldIgnoresDirection = false)
         {
-            if (IsDead) return false;
-            if (invincibleWhileDashing && skills != null && skills.IsDashing) return false;
+            if (IsDead || godMode || Time.time < graceUntil) return false;
+            if (dashCanDodge && invincibleWhileDashing && skills != null && skills.IsDashing) return false;
 
             // Shield aktif dan serangan datang dari sisi depan shield -> terblok
-            if (skills != null && skills.IsShielding && skills.shieldPivot != null)
+            if (shieldCanBlock && skills != null && skills.IsShielding && skills.shieldPivot != null)
             {
+                if (shieldIgnoresDirection) return false;
                 Vector2 facing = skills.shieldPivot.right;
                 Vector2 toSource = (sourcePosition - (Vector2)skills.shieldPivot.position).normalized; // dari titik shield, bukan pusat player
                 if (Vector2.Dot(facing, toSource) > 0f) return false;
@@ -50,7 +56,7 @@ namespace Cainos.PixelArtTopDown_Basic
 
         public void Die()
         {
-            if (IsDead) return;
+            if (IsDead || godMode) return;
             StartCoroutine(DieRoutine());
         }
 
@@ -74,6 +80,10 @@ namespace Cainos.PixelArtTopDown_Basic
             transform.position = respawnPoint;
             rb.velocity = Vector2.zero;
             if (energy != null) energy.RefillFull();
+
+            // Ulang ruangan yang belum bersih saat checkpoint terakhir (musuh muncul lagi dari awal)
+            EnemySpawner.ResetAllUncommitted();
+            graceUntil = Time.time + respawnGraceTime;
 
             if (skills != null) skills.enabled = true;
             if (controller != null) controller.movementLocked = false;
