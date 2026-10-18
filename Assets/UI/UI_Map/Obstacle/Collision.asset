@@ -10,9 +10,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 13312, guid: 0000000000000000e000000000000000, type: 0}
-  m_Name: TILE SHADING_0
+  m_Name: Collision
   m_EditorClassIdentifier: 
-  m_Sprite: {fileID: 1679853825, guid: 04ad4bf67a2e5494d80b971b781f70ad, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 948c903eb536c1d42853fc16020589a7, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Transform:
     e00: 1
