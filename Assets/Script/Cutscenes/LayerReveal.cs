@@ -4,6 +4,8 @@ using UnityEngine.Events;
 
 public class LayerReveal : MonoBehaviour
 {
+    public enum Direction { None, Right, Left, Top, Bottom }
+
     [System.Serializable]
     public class Layer
     {
@@ -12,9 +14,9 @@ public class LayerReveal : MonoBehaviour
         public Direction from = Direction.None;
         public float distance = 300f;
         public float duration = 0.6f;
+        [Tooltip("Suara khusus layer ini. Kosong = pakai Panel Sound default.")]
+        public AudioClip sound;
     }
-
-    public enum Direction { None, Right, Left, Top, Bottom }
 
     [Tooltip("Urutan = urutan klik. Elemen 0 muncul paling awal.")]
     [SerializeField] private Layer[] layers;
@@ -54,6 +56,15 @@ public class LayerReveal : MonoBehaviour
         if (index + 1 < layers.Length)
         {
             index++;
+
+            // Suara tiap layer baru, kecuali layer pertama
+            if (index > 0 && AudioManager.Instance != null)
+            {
+                AudioClip s = layers[index].sound;
+                if (s != null) AudioManager.Instance.PlaySfx(s);
+                else AudioManager.Instance.PlayPanel();
+            }
+
             routine = StartCoroutine(Show(index));
         }
         else

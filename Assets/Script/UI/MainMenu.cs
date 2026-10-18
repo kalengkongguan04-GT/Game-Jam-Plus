@@ -27,6 +27,9 @@ public class MainMenu : MonoBehaviour
         if (starting) return;
         starting = true;
 
+        // Hentikan musik menu
+        if (AudioManager.Instance != null) AudioManager.Instance.StopMusic();
+
         if (SceneFader.Instance != null)
             SceneFader.Instance.LoadScene(startSceneName);
         else

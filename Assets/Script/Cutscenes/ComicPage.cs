@@ -21,6 +21,8 @@ public class ComicPage : MonoBehaviour
         public PanelEntry[] panels;
         [Tooltip("Jeda antar panel (detik). Isi kecil, misal 0 sampai 0.3.")]
         public float staggerDelay = 0f;
+        [Tooltip("Suara khusus step ini. Kosong = pakai Panel Sound default.")]
+        public AudioClip sound;
         public UnityEvent onStepStart;
     }
 
@@ -94,8 +96,6 @@ public class ComicPage : MonoBehaviour
 
     public void Next()
     {
-        Debug.Log($"[{name}] Next(): step={currentStep}, total={steps.Length}, animating={isAnimating}");
-
         if (isAnimating)
         {
             FinishCurrentStep();
@@ -106,6 +106,15 @@ public class ComicPage : MonoBehaviour
         {
             currentStep++;
             steps[currentStep].onStepStart?.Invoke();
+
+            // Suara tiap panel baru, kecuali step pertama
+            if (currentStep > 0 && AudioManager.Instance != null)
+            {
+                AudioClip s = steps[currentStep].sound;
+                if (s != null) AudioManager.Instance.PlaySfx(s);
+                else AudioManager.Instance.PlayPanel();
+            }
+
             animRoutine = StartCoroutine(ShowStep(currentStep));
         }
         else
@@ -116,15 +125,12 @@ public class ComicPage : MonoBehaviour
 
     private void FinishPage()
     {
-        Debug.Log($"[{name}] Semua step selesai, halaman selesai.");
-
         if (onPageFinished != null && onPageFinished.GetPersistentEventCount() > 0)
         {
             onPageFinished.Invoke();
         }
         else
         {
-            // Cadangan: event kosong, panggil ComicManager langsung
             ComicManager manager = FindObjectOfType<ComicManager>();
             if (manager != null) manager.NextPage();
             else Debug.LogWarning($"[{name}] On Page Finished kosong dan ComicManager tidak ditemukan.");
@@ -149,7 +155,6 @@ public class ComicPage : MonoBehaviour
         PanelStep step = steps[stepIndex];
         int count = step.panels != null ? step.panels.Length : 0;
 
-        // Step tanpa panel (hanya memicu event): langsung selesai
         if (count == 0)
         {
             isAnimating = false;
