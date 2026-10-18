@@ -10,20 +10,25 @@ public class ComicManager : MonoBehaviour
     [SerializeField] private string gameplaySceneName = "Gameplay";
 
     [Header("Opsi")]
-    [SerializeField] private bool allowSkip = true;   // tombol Escape untuk lewati komik
+    [SerializeField] private bool allowSkip = false;
 
     private int currentPage = 0;
+    private bool loading;
 
     private void Start()
     {
-        // Matikan semua halaman, lalu nyalakan halaman pertama
-        for (int i = 0; i < pages.Length; i++)
-            pages[i].SetActive(false);
-
-        if (pages.Length > 0)
-            pages[0].SetActive(true);
-        else
+        if (pages == null || pages.Length == 0)
+        {
+            Debug.LogWarning("ComicManager: Pages kosong, langsung ke gameplay.");
             LoadGameplay();
+            return;
+        }
+
+        for (int i = 0; i < pages.Length; i++)
+            if (pages[i] != null) pages[i].SetActive(false);
+
+        pages[0].SetActive(true);
+        Debug.Log("ComicManager: mulai dari " + pages[0].name);
     }
 
     private void Update()
@@ -32,23 +37,48 @@ public class ComicManager : MonoBehaviour
             LoadGameplay();
     }
 
-    // Dipanggil dari On Page Finished milik tiap ComicPage
+    // Dipanggil saat sebuah halaman selesai
     public void NextPage()
-    {
-        pages[currentPage].SetActive(false);
-        currentPage++;
+{
+    if (loading) return;
 
-        if (currentPage < pages.Length)
-            pages[currentPage].SetActive(true);
-        else
-            LoadGameplay();
+    int old = currentPage;
+    currentPage++;
+
+    if (currentPage < pages.Length)
+    {
+        // Nyalakan halaman baru DULU
+        pages[currentPage].SetActive(true);
+
+        // Pastikan halaman baru digambar di depan halaman lama
+        pages[currentPage].transform.SetAsLastSibling();
+
+        // Matikan halaman lama setelah halaman baru sempat tampil
+        StartCoroutine(DisableAfterFrame(pages[old]));
     }
+    else
+    {
+        LoadGameplay();
+    }
+}
+
+private System.Collections.IEnumerator DisableAfterFrame(GameObject page)
+{
+    yield return null;
+    yield return null;
+    if (page != null) page.SetActive(false);
+}
 
     public void LoadGameplay()
-{
-    if (SceneFader.Instance != null)
-        SceneFader.Instance.LoadScene(gameplaySceneName);
-    else
-        SceneManager.LoadScene(gameplaySceneName);
-}
+    {
+        if (loading) return;
+        loading = true;
+
+        Debug.Log("ComicManager: pindah ke scene " + gameplaySceneName);
+
+        if (SceneFader.Instance != null)
+            SceneFader.Instance.LoadScene(gameplaySceneName);
+        else
+            SceneManager.LoadScene(gameplaySceneName);
+    }
 }
