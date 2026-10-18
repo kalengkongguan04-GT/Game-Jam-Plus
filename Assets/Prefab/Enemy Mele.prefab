@@ -98,6 +98,8 @@ GameObject:
   - component: {fileID: 3446937003587606100}
   - component: {fileID: 6510315053819362131}
   - component: {fileID: 6792976385272930850}
+  - component: {fileID: -7796937277699816450}
+  - component: {fileID: 5412953226967030003}
   m_Layer: 6
   m_Name: Enemy Mele
   m_TagString: Untagged
@@ -114,8 +116,8 @@ Transform:
   m_GameObject: {fileID: 3559613325623783389}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -2.89, y: -0.42, z: 0}
-  m_LocalScale: {x: 0.45126334, y: 0.45126334, z: 0.45126334}
+  m_LocalPosition: {x: -6.64, y: -1.48, z: 0}
+  m_LocalScale: {x: 0.0524007, y: 0.0524007, z: 0.0524007}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1767010471702626793}
@@ -162,7 +164,7 @@ SpriteRenderer:
   m_SortingLayerID: -1869315837
   m_SortingLayer: 1
   m_SortingOrder: 1
-  m_Sprite: {fileID: 21300000, guid: c5e01ff6c27c84768a2ca7e24e5e6af3, type: 3}
+  m_Sprite: {fileID: 21300000, guid: e4e0f96423946de48aa08e85c8bc1845, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -209,7 +211,7 @@ BoxCollider2D:
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 2.02, y: 2.25}
+    oldSize: {x: 20.48, y: 20.48}
     newSize: {x: 2.02, y: 2.25}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
@@ -283,3 +285,55 @@ MonoBehaviour:
   meleeRecovery: 0.5
   meleeCooldown: 0.5
   meleeTelegraph: {fileID: 814686984230549031}
+  deathDestroyDelay: 0.6
+--- !u!95 &-7796937277699816450
+Animator:
+  serializedVersion: 5
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3559613325623783389}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: 90fdea77999e43f408ddf37acb4daee8, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
+--- !u!114 &5412953226967030003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3559613325623783389}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 50342a510e120f14ca7f212fca5cf3a4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  animator: {fileID: -7796937277699816450}
+  spriteRenderer: {fileID: 3465794164510399287}
+  useFlipX: 0
+  spriteFacesRight: 1
+  invertFacing: 0
+  moveThreshold: 0.25
+  stopDelay: 0.1
+  freezeWhenIdle: 1
+  attackAnimStart: 0
+  attackStateName: Attack
+  attackSingleDirection: 1
+  attackSpriteFacesRight: 1
+  fallbackDeathFade: 1
+  moveBool: IsMoving
+  directionInt: Direction
+  windupTrigger: Windup
+  attackTrigger: Attack
+  dieTrigger: Die

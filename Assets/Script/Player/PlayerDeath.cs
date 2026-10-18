@@ -12,6 +12,7 @@ namespace Cainos.PixelArtTopDown_Basic
         public bool godMode = false;                 // cheat/testing: tidak bisa mati sama sekali
         public float respawnGraceTime = 1f;          // kebal sebentar setelah respawn (detik), 0 = tidak ada
         public string projectileTag = "EnemyProjectile";
+        public DeathScreen deathScreen;              // opsional: layar fade + tulisan DEAD (dicari otomatis kalau kosong)
 
         public bool IsDead { get; private set; }
 
@@ -29,6 +30,7 @@ namespace Cainos.PixelArtTopDown_Basic
             skills = GetComponent<PlayerSkills>();
             controller = GetComponent<TopDownCharacterController>();
             respawnPoint = transform.position; // posisi awal = checkpoint pertama
+            if (deathScreen == null) deathScreen = FindObjectOfType<DeathScreen>(true);
         }
 
         public void SetCheckpoint(Vector3 position) => respawnPoint = position;
@@ -70,7 +72,10 @@ namespace Cainos.PixelArtTopDown_Basic
             rb.velocity = Vector2.zero;
 
             // TODO: animasi/efek mati bisa dimainkan di sini
-            yield return new WaitForSeconds(respawnDelay);
+            yield return new WaitForSeconds(respawnDelay); // jeda singkat supaya player sempat melihat apa yang membunuhnya
+
+            // Layar memudar ke hitam, tulisan DEAD tampil beberapa detik
+            if (deathScreen != null) yield return deathScreen.PlayIn();
 
             // Hapus semua peluru yang masih melayang
             foreach (var p in GameObject.FindGameObjectsWithTag(projectileTag))
@@ -84,6 +89,9 @@ namespace Cainos.PixelArtTopDown_Basic
             // Ulang ruangan yang belum bersih saat checkpoint terakhir (musuh muncul lagi dari awal)
             EnemySpawner.ResetAllUncommitted();
             graceUntil = Time.time + respawnGraceTime;
+
+            // Layar mulai terang lagi (tidak ditunggu, player langsung bisa bergerak)
+            if (deathScreen != null) deathScreen.PlayOut();
 
             if (skills != null) skills.enabled = true;
             if (controller != null) controller.movementLocked = false;

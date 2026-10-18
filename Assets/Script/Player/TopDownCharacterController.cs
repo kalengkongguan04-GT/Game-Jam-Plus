@@ -23,6 +23,8 @@ namespace Cainos.PixelArtTopDown_Basic
         public AudioClip footstepSound;
         public float footstepInterval = 0.35f; // jarak waktu antar bunyi langkah, detik
         [Range(0f, 1f)] public float footstepVolume = 0.7f;
+        [Tooltip("Variasi nada acak tiap langkah supaya tidak monoton. 1 dan 1 = tanpa variasi.")]
+        public Vector2 footstepPitchRange = new Vector2(0.95f, 1.05f);
 
 
         private AudioSource footstepSource; // khusus footstep, terpisah dari AudioManager, supaya bisa di-Stop() langsung
@@ -55,6 +57,7 @@ namespace Cainos.PixelArtTopDown_Basic
             footstepSource.playOnAwake = false;
             footstepSource.loop = false;
             footstepSource.volume = footstepVolume;
+            footstepSource.spatialBlend = 0f;
 
             if (animator != null) animator.SetInteger("Direction", facingDirection);
         }
@@ -123,17 +126,18 @@ namespace Cainos.PixelArtTopDown_Basic
             }
         }
 
+        // Langkah kaki: satu langkah per footstepInterval selama berjalan, berhenti total saat diam.
+        // Memakai Play() (bukan PlayOneShot) supaya langkah baru MEMOTONG langkah sebelumnya, tidak menumpuk,
+        // dan supaya Stop() pasti bisa menghentikan suaranya.
         private void HandleFootstepSound(bool isMoving)
         {
-            if (!isMoving)
+            // Game di-pause: Update tetap jalan tapi suara tidak boleh lanjut
+            if (Time.timeScale == 0f) isMoving = false;
+
+            if (!isMoving || footstepSound == null)
             {
-                footstepTimer = 0f; // biar begitu jalan lagi, langsung bunyi (bukan nunggu sisa interval lama)
-
-                if (footstepSource.isPlaying)
-                {
-                    footstepSource.Stop(); // langsung berhenti, tidak menunggu clip selesai sendiri
-                }
-
+                footstepTimer = footstepInterval; // begitu jalan lagi, langkah pertama langsung bunyi
+                footstepSource.Stop();            // selalu dihentikan, tidak bergantung isPlaying
                 return;
             }
 
@@ -143,11 +147,17 @@ namespace Cainos.PixelArtTopDown_Basic
             {
                 footstepTimer = 0f;
 
-                if (footstepSound != null)
-                {
-                    footstepSource.PlayOneShot(footstepSound, footstepVolume);
-                }
+                footstepSource.clip = footstepSound;
+                footstepSource.volume = footstepVolume;
+                footstepSource.pitch = Random.Range(footstepPitchRange.x, footstepPitchRange.y);
+                footstepSource.Play();
             }
+        }
+
+        // Script dimatikan (mis. cutscene): jangan ada suara langkah yang tersisa
+        private void OnDisable()
+        {
+            if (footstepSource != null) footstepSource.Stop();
         }
     }
 }

@@ -56,6 +56,19 @@ namespace Cainos.PixelArtTopDown_Basic
         public float meleeCooldown = 0.5f;       // jeda sebelum bisa menyerang lagi setelah recovery
         public GameObject meleeTelegraph;        // opsional: lingkaran merah (sprite) yang menunjukkan area serang saat aba-aba
 
+        [Header("Animasi / Mati")]
+        public float deathDestroyDelay = 0.6f;   // lama menunggu animasi mati sebelum musuh dihapus (0 = langsung)
+
+        // Status untuk EnemyAnimator
+        public bool IsChasing => isChasing;
+        public bool IsAttacking => isAttacking;
+        public bool IsDead { get; private set; }
+
+        // Event untuk animasi / SFX
+        public event System.Action OnWindupStart;   // aba-aba serangan mulai
+        public event System.Action OnAttackFire;    // peluru keluar / area serang aktif
+        public event System.Action OnDied;
+
         private Rigidbody2D rb;
         private Transform player;
         private bool isChasing;
@@ -88,7 +101,7 @@ namespace Cainos.PixelArtTopDown_Basic
 
         private void Update()
         {
-            if (player == null) return;
+            if (IsDead || player == null) return;
 
             float dist = Vector2.Distance(transform.position, player.position);
 
@@ -211,7 +224,9 @@ namespace Cainos.PixelArtTopDown_Basic
         {
             isAttacking = true;
             rb.velocity = Vector2.zero;
-            yield return new WaitForSeconds(windupTime);   // TODO: mainkan animasi/efek aba-aba di sini
+            OnWindupStart?.Invoke();
+            yield return new WaitForSeconds(windupTime);
+            OnAttackFire?.Invoke();
 
             if (player != null && projectilePrefab != null)
             {
@@ -235,8 +250,10 @@ namespace Cainos.PixelArtTopDown_Basic
             // 1. ABA-ABA: arah dikunci di awal, jadi player bisa menghindar dengan bergerak/dash
             Vector2 dir = ((Vector2)player.position - (Vector2)transform.position).normalized;
             ShowTelegraph(dir, true);
-            yield return new WaitForSeconds(meleeWindup);   // TODO: animasi aba-aba bisa dimainkan di sini
+            OnWindupStart?.Invoke();
+            yield return new WaitForSeconds(meleeWindup);
             ShowTelegraph(dir, false);
+            OnAttackFire?.Invoke();
 
             // 2. SERANG: area serang aktif sebentar, musuh sedikit maju
             float t = 0f;
@@ -291,7 +308,19 @@ namespace Cainos.PixelArtTopDown_Basic
         // Dipanggil PlayerSkills saat laser mengenai musuh
         public void OnLaserHit()
         {
-            Destroy(gameObject); // ganti dengan animasi mati kalau sudah ada
+            if (IsDead) return;
+            IsDead = true;
+
+            StopAllCoroutines();
+            ShowTelegraph(Vector2.right, false);
+            rb.velocity = Vector2.zero;
+            All.Remove(this); // tidak ikut dorong-mendorong musuh lain lagi
+
+            foreach (var c in GetComponentsInChildren<Collider2D>())
+                c.enabled = false;
+
+            OnDied?.Invoke();
+            Destroy(gameObject, deathDestroyDelay);
         }
 
         private void OnDrawGizmosSelected()

@@ -70,6 +70,7 @@ namespace Cainos.PixelArtTopDown_Basic
         private TopDownCharacterController controller;
         private Camera cam;
         private AimIndicator aim; // sumber titik & arah bidik (sama dengan panah)
+        private SkillSounds sounds; // opsional: sound effect skill
         private SpriteRenderer shieldRenderer;
         private float lastDashTime = -99f;
         private bool laserActive; // true selama charge DAN saat laser menyala
@@ -81,6 +82,7 @@ namespace Cainos.PixelArtTopDown_Basic
             controller = GetComponent<TopDownCharacterController>();
             cam = Camera.main;
             aim = GetComponent<AimIndicator>();
+            sounds = GetComponent<SkillSounds>();
             if (shieldBody != null) shieldRenderer = shieldBody.GetComponentInChildren<SpriteRenderer>(true); // true: objek shield awalnya nonaktif
             SetShield(false);
             HideLaserVisuals();
@@ -160,6 +162,7 @@ namespace Cainos.PixelArtTopDown_Basic
 
             // Damage diberikan sekali saat laser keluar
             ApplyLaserDamage(origin, dir);
+            if (sounds != null) sounds.PlayLaser(); // suara laser, tepat saat laser keluar
 
             // ----- 3. Animasi visual laser -----
             EnableLaserVisuals(true);
