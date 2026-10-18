@@ -126,10 +126,10 @@ TextureImporter:
       name: Wall 5_0
       rect:
         serializedVersion: 2
-        x: 1
-        y: 3
-        width: 127
-        height: 380
+        x: 0
+        y: 256
+        width: 128
+        height: 128
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -139,6 +139,48 @@ TextureImporter:
       bones: []
       spriteID: 24e701165caa9e04fb0daed1a916a2b4
       internalID: 1909705126
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Wall 5_1
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 128
+        width: 128
+        height: 128
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: afa07ee84a99b3e4f8def24b1ff8eada
+      internalID: 1176791084
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Wall 5_2
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 0
+        width: 128
+        height: 128
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 30aaeb7f6fc93fa45b769a6e759cdd4c
+      internalID: 1952214879
       vertices: []
       indices: 
       edges: []
@@ -155,6 +197,8 @@ TextureImporter:
     secondaryTextures: []
     nameFileIdTable:
       Wall 5_0: 1909705126
+      Wall 5_1: 1176791084
+      Wall 5_2: 1952214879
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
