@@ -45,7 +45,10 @@ public class ComicManager : MonoBehaviour
     }
 
     public void LoadGameplay()
-    {
+{
+    if (SceneFader.Instance != null)
+        SceneFader.Instance.LoadScene(gameplaySceneName);
+    else
         SceneManager.LoadScene(gameplaySceneName);
-    }
+}
 }
