@@ -19,9 +19,9 @@ public class ComicPage : MonoBehaviour
     public class PanelStep
     {
         public PanelEntry[] panels;
-        [Tooltip("Jeda antar panel dalam step ini. 0 = muncul bersamaan.")]
+        [Tooltip("Jeda antar panel (detik). Isi kecil, misal 0 sampai 0.3.")]
         public float staggerDelay = 0f;
-        public UnityEvent onStepStart;   // BARU: dipanggil saat step ini dimulai
+        public UnityEvent onStepStart;
     }
 
     [Header("Step (1 step = 1 klik)")]
@@ -50,9 +50,16 @@ public class ComicPage : MonoBehaviour
         for (int s = 0; s < steps.Length; s++)
         {
             PanelEntry[] list = steps[s].panels;
+            if (list == null) list = new PanelEntry[0];
             finalPositions[s] = new Vector2[list.Length];
+
             for (int p = 0; p < list.Length; p++)
             {
+                if (list[p].panel == null)
+                {
+                    Debug.LogWarning($"[{name}] Step {s}, Panel {p} masih None. Isi di Inspector.", this);
+                    continue;
+                }
                 RectTransform rt = (RectTransform)list[p].panel.transform;
                 finalPositions[s][p] = rt.anchoredPosition;
                 list[p].panel.alpha = 0f;
@@ -61,7 +68,10 @@ public class ComicPage : MonoBehaviour
         initialized = true;
     }
 
-    private void OnEnable() { enabledFrame = Time.frameCount; }
+    private void OnEnable()
+    {
+        enabledFrame = Time.frameCount;
+    }
 
     private void Start()
     {
@@ -84,17 +94,40 @@ public class ComicPage : MonoBehaviour
 
     public void Next()
     {
-        if (isAnimating) { FinishCurrentStep(); return; }
+        Debug.Log($"[{name}] Next(): step={currentStep}, total={steps.Length}, animating={isAnimating}");
+
+        if (isAnimating)
+        {
+            FinishCurrentStep();
+            return;
+        }
 
         if (currentStep + 1 < steps.Length)
         {
             currentStep++;
-            steps[currentStep].onStepStart?.Invoke();   // BARU: picu event step
+            steps[currentStep].onStepStart?.Invoke();
             animRoutine = StartCoroutine(ShowStep(currentStep));
         }
         else
         {
-            onPageFinished?.Invoke();
+            FinishPage();
+        }
+    }
+
+    private void FinishPage()
+    {
+        Debug.Log($"[{name}] Semua step selesai, halaman selesai.");
+
+        if (onPageFinished != null && onPageFinished.GetPersistentEventCount() > 0)
+        {
+            onPageFinished.Invoke();
+        }
+        else
+        {
+            // Cadangan: event kosong, panggil ComicManager langsung
+            ComicManager manager = FindObjectOfType<ComicManager>();
+            if (manager != null) manager.NextPage();
+            else Debug.LogWarning($"[{name}] On Page Finished kosong dan ComicManager tidak ditemukan.");
         }
     }
 
@@ -113,10 +146,19 @@ public class ComicPage : MonoBehaviour
 
     private IEnumerator ShowStep(int stepIndex)
     {
-        isAnimating = true;
         PanelStep step = steps[stepIndex];
-        int count = step.panels.Length;
-        float totalTime = (count - 1) * step.staggerDelay + fadeDuration;
+        int count = step.panels != null ? step.panels.Length : 0;
+
+        // Step tanpa panel (hanya memicu event): langsung selesai
+        if (count == 0)
+        {
+            isAnimating = false;
+            yield break;
+        }
+
+        isAnimating = true;
+        float stagger = Mathf.Max(0f, step.staggerDelay);
+        float totalTime = (count - 1) * stagger + fadeDuration;
 
         float elapsed = 0f;
         while (elapsed < totalTime)
@@ -125,7 +167,9 @@ public class ComicPage : MonoBehaviour
             for (int p = 0; p < count; p++)
             {
                 PanelEntry entry = step.panels[p];
-                float localT = elapsed - p * step.staggerDelay;
+                if (entry.panel == null) continue;
+
+                float localT = elapsed - p * stagger;
                 float k = Mathf.Clamp01(localT / fadeDuration);
                 k = 1f - (1f - k) * (1f - k);
 
@@ -137,17 +181,21 @@ public class ComicPage : MonoBehaviour
             }
             yield return null;
         }
+
         FinishCurrentStep();
     }
 
     private void FinishCurrentStep()
     {
         if (animRoutine != null) StopCoroutine(animRoutine);
-        if (currentStep >= 0)
+
+        if (currentStep >= 0 && currentStep < steps.Length)
         {
             PanelStep step = steps[currentStep];
-            for (int p = 0; p < step.panels.Length; p++)
+            int count = step.panels != null ? step.panels.Length : 0;
+            for (int p = 0; p < count; p++)
             {
+                if (step.panels[p].panel == null) continue;
                 step.panels[p].panel.alpha = 1f;
                 ((RectTransform)step.panels[p].panel.transform).anchoredPosition = finalPositions[currentStep][p];
             }
